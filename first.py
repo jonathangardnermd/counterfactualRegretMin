@@ -105,10 +105,6 @@ class Action:
   PASS='p'
   BET='b'
 
-# ACTION_NAMES=['p','b']
-# def actionToName(action):
-#   return ACTION_NAMES[action]
-
 def findFirstOccurrences(arr,val,numOccurrences=1):
   idx,ct=0,0
   while idx<len(arr):
@@ -125,7 +121,6 @@ class Hx:
 
   def getInfoSetStr(self):
     playerIdx = len(self.actions)%2
-    # actionStrs = [action for action in self.actions]
     return self.pockets[playerIdx]+''.join(self.actions)
 
   def nextActions(self):
@@ -146,16 +141,33 @@ class Hx:
     self.actions.append(action)
 
   def __str__(self):
-    # actionStrs = [actionToName(action) for action in self.actions]
     return f'{self.pockets}, {self.actions}'
   
 
 class GameTreeIterator:
-  def __init__(self,downFxn,upFxn):
+  def __init__(self):
     self.hx=Hx()
-    self.downFxn=downFxn
-    self.upFxn=upFxn
 
+  def initFullTree(self):
+    for pr in ALL_PAIRS:
+      self.hx.pockets=pr
+      self.initTraverse()
+
+  def initTraverse(self):
+    print(self.hx)
+    infoSetStr=self.hx.getInfoSetStr()
+    possibleActions = self.hx.nextActions()
+    if not possibleActions:
+      print(f'Terminal: {self.hx}')
+      return
+    for action in possibleActions:
+      initStrategies(infoSetStr,action,1/len(possibleActions))
+      initUtilitiesForInfoSets(infoSetStr,action)
+
+      self.hx.appendAction(action)
+      self.initTraverse() #recursive call
+      self.hx.popAction()  
+      
   def traverseFullTree(self):
     for pr in ALL_PAIRS:
       self.hx.pockets=pr
@@ -163,49 +175,47 @@ class GameTreeIterator:
 
   def traverse(self):
     print(self.hx)
-    playerIdx=len(self.hx.actions)%2
     possibleActions = self.hx.nextActions()
     if not possibleActions:
-      util = calcUtilityAtTerminalNode(self.hx.pockets,self.hx.actions)
-      print(f'Terminal: {self.hx}: util={util}')
-      # return util
+      print(f'Terminal: {self.hx}')
+      return
     
-    # expectedUtil=0
+    updateBeliefs(self.hx)
     for action in possibleActions:
-      # Strategy.setStrategy(self.hx.getInfoSetStr(),action,1/len(possibleActions))
-      self.downFxn(self.hx,action,len(possibleActions))
       self.hx.appendAction(action)
-      expectedUtilFromAction=self.traverse()
-
-      print(f'expectedUtilFromAction={expectedUtilFromAction}, hx={self.hx}, action={action}')
-      # expectedUtil+=expectedUtilFromAction
-      # Utilities.data.setVal()
+      self.traverse() #recursive call
       self.hx.popAction()  
-      if self.upFxn:
-        opponentPocket=self.hx.pockets[1-playerIdx]
-        self.upFxn(self.hx,action,opponentPocket,expectedUtilFromAction,playerIdx)
-    
 
-# def calcExpectedUtil(infoSetStr, possibleActions):
-#   expectedUtil=0
-#   for action in possibleActions:
-#     wt = Strategy.data.getVal(infoSetStr,action)
-#     util = Util
 
-def initStrategies(hx : Hx,action,numPossibleActions):
-  Strategy.data.setVal(hx.getInfoSetStr(),action,1/numPossibleActions)
+def initStrategies(infoSetStr,action,numPossibleActions):
+  Strategy.data.setVal(infoSetStr,action,1/numPossibleActions)
 
-def initUtilitiesForInfoSets(hx:Hx,action,*ignore):
-  infoSetStr = hx.getInfoSetStr()
+def initUtilitiesForInfoSets(infoSetStr,action):
   Utilities.data.setVal(infoSetStr,action,0)
-  # Utilities.data.setVal(infoSetStr,'b',0)
 
-# def initBeliefs():
-#   pass
+def updateBeliefs(hx:Hx,ignore=None, ignore2=None):  
+  infoSetStr = hx.getInfoSetStr()
+  # print(f'updateBeliefs for {infoSetStr}')
+  if len(infoSetStr)==1:
+    possibleOpponentPockets=getPossibleOpponentPockets(infoSetStr[0])
+    for oppPocket in possibleOpponentPockets:  
+      Beliefs.data.setVal(infoSetStr,oppPocket,1/len(possibleOpponentPockets))
+    return 
+  ancestralInfoSets=getAncestralInfoSets(infoSetStr)
+  # print(f'ancestors that will be used for the belief update: {ancestralInfoSets}')
+  # print('Anc',ancestralInfoSets)
+  lastAction = infoSetStr[-1]
+  tot = 0
+  for infoSet in ancestralInfoSets:
+    tot+=Strategy.data.getVal(infoSet,lastAction)
+  for infoSet in ancestralInfoSets:
+    Beliefs.data.setVal(infoSetStr,infoSet[0],Strategy.data.getVal(infoSet,lastAction)/tot)
+    # print(f'belief updated: ({infoSetStr},{infoSet[0]})={Beliefs.data.getVal(infoSetStr,infoSet[0])}')
 
-g=GameTreeIterator(initStrategies,initUtilitiesForInfoSets)
-g.traverseFullTree()
+g=GameTreeIterator()
+g.initFullTree()
 print(Strategy.data)
+print(Utilities.data)
 
 #player 1
 Strategy.data.setVal('K','b',2/3)
@@ -246,40 +256,7 @@ Strategy.data.setVal('Jp','b',1/3)
 Strategy.data.setVal('Jp','p',2/3)
 
 
-
-
-def updateBeliefs(hx:Hx,ignore=None, ignore2=None):  
-  infoSetStr = hx.getInfoSetStr()
-  print(f'updateBeliefs for {infoSetStr}')
-  if len(infoSetStr)==1:
-    possibleOpponentPockets=getPossibleOpponentPockets(infoSetStr[0])
-    for oppPocket in possibleOpponentPockets:  
-      Beliefs.data.setVal(infoSetStr,oppPocket,1/len(possibleOpponentPockets))
-    return 
-  ancestralInfoSets=getAncestralInfoSets(infoSetStr)
-  print(f'ancestors that will be used for the belief update: {ancestralInfoSets}')
-  # print('Anc',ancestralInfoSets)
-  lastAction = infoSetStr[-1]
-  tot = 0
-  for infoSet in ancestralInfoSets:
-    tot+=Strategy.data.getVal(infoSet,lastAction)
-  for infoSet in ancestralInfoSets:
-    Beliefs.data.setVal(infoSetStr,infoSet[0],Strategy.data.getVal(infoSet,lastAction)/tot)
-    print(f'belief updated: ({infoSetStr},{infoSet[0]})={Beliefs.data.getVal(infoSetStr,infoSet[0])}')
-
-
-def updateUtilities(hx:Hx,action,opponentPocket,expectedUtil,playerIdx):
-  infoSetStr = hx.getInfoSetStr()
-
-  #TODO: base case 
-
-  belief = Beliefs.data.getVal(infoSetStr,opponentPocket)
-  print(f'bel={belief}, expected={expectedUtil}')
-  Utilities.data.addToVal(infoSetStr,action,belief*expectedUtil[playerIdx])
-
-
-
-g=GameTreeIterator(updateBeliefs,updateUtilities)
+g=GameTreeIterator()
 g.traverseFullTree()
 print(Beliefs.data)
 
@@ -287,5 +264,4 @@ print(Beliefs.data)
 util=calcUtilityAtTerminalNode('JQ','pbb')
 print(f'util={util}')
 
-print(Utilities.data)
 
