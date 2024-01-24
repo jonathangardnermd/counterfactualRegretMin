@@ -104,6 +104,11 @@ class Beliefs:
    data = NestedMap()
 class Utilities:
    data=NestedMap()
+class Gains:
+  data=NestedMap()
+
+# class InfoSetLikelihoods:
+#   data=NestedMap()
 
 
 class Action:
@@ -345,6 +350,55 @@ def calcUtilitiesForInfoSet(infoSet,expectedUtilsByInfoSet):
 for infoSet in sortedInfoSet:
   calcUtilitiesForInfoSet(infoSet,expectedUtilsByInfoSet)
 
+
+# class Gains:
+
+
+def initGains():
+  for infoSet in Strategy.data.outerMap.keys():
+    innerMap = Strategy.data.outerMap[infoSet]
+    for action in innerMap.keys():
+      stratVal = innerMap[action]
+      Gains.data.setVal(infoSet,action,stratVal)
+
+infoSetLikelihoods = {infoSet:0 for infoSet in Strategy.data.outerMap.keys()}
+
+def calcInfoSetLikelihoods():
+  for infoSet in sorted(Strategy.data.outerMap.keys(), key=lambda x: len(x)):
+    possibleOppPockets=getPossibleOpponentPockets(infoSet[0])
+    if len(infoSet)==1:
+      infoSetLikelihoods[infoSet]=1/len(RANK_NAMES)
+    elif len(infoSet)==2:
+      for oppPocket in possibleOppPockets:
+        oppInfoSet = oppPocket + infoSet[1:-1]
+        infoSetLikelihoods[infoSet]+=1/len(RANK_NAMES)*Strategy.data.getVal(oppInfoSet,infoSet[-1])
+    else:
+      for oppPocket in possibleOppPockets:
+        oppInfoSet = oppPocket + infoSet[1:-1]
+        infoSetLikelihoods[infoSet]+=infoSetLikelihoods[infoSet[:-2]]/len(possibleOppPockets)*Strategy.data.getVal(oppInfoSet,infoSet[-1])
+      # infoSetLikelihoods[infoSet]=infoSetLikelihoods[infoSet[:-2]]*Strategy.data.getVal(infoSet[:-1],infoSet[-1])
+        print(f'likelihood: infoSet={infoSet}, oppInfoSet={oppInfoSet}, infoSetLikelihoods[infoSet[:-2]]={infoSetLikelihoods[infoSet[:-2]]}, stratVal={Strategy.data.getVal(oppInfoSet,infoSet[-1])}')
+
+
+def calcGains():
+  calcInfoSetLikelihoods()
+  for infoSet in sortedInfoSet:
+    expectedUtilForCurrentStrat = expectedUtilsByInfoSet[infoSet]
+    possibleActions = Strategy.data.getInnerMap(infoSet).keys()
+    for action in possibleActions:
+      utilForActionPureStrat = Utilities.data.getVal(infoSet,action)
+      gain = max(0,utilForActionPureStrat)
+      Gains.data.addToVal(infoSet,action,gain*infoSetLikelihoods[infoSet])
+
+def updateStrategy():
+  for infoSet in sortedInfoSet:
+    # expectedUtilForCurrentStrat = expectedUtilsByInfoSet[infoSet]
+    gains = Gains.data.getInnerMap(infoSet)
+    totGains = sum(gains.values())
+    possibleActions = Strategy.data.getInnerMap(infoSet).keys()
+    for action in possibleActions:
+      Strategy.data.setVal(infoSet,action,gains[action]/totGains)
+
 # for infoSet in sortedInfoSet:
 #   beliefs = Beliefs.data.getInnerMap(infoSet)
 #   # print(f'infoSet={infoSet}, beliefs={beliefs}')
@@ -390,3 +444,14 @@ print('ExpectedUtils',expectedUtilsByInfoSet)
 
 util=calcUtilityAtTerminalNode('JQ','pbb')
 print(f'util={util}')
+
+
+# calcInfoSetLikelihoods()
+initGains()
+calcGains()
+print(infoSetLikelihoods)
+print(Strategy.data)
+
+
+updateStrategy()
+print(Strategy.data)
