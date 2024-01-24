@@ -16,6 +16,7 @@ def playerOnePocketIsHigher(pocket1,pocket2):
 
 def calcUtilityAtTerminalNode(pockets,actions: list):
   actionStr = ''.join(actions)
+  # print(f'calcUtilityAtTerminalNode={actionStr}, pockets={pockets}')
   utility=None
   if actionStr=='pp':
     # both checked
@@ -35,6 +36,7 @@ def calcUtilityAtTerminalNode(pockets,actions: list):
     else:
       utility= -2,2
   else:
+    # utility=0,0
     raise ValueError(f'unexpected actionStr={actionStr}')
   return utility*ante
 
@@ -86,7 +88,7 @@ class NestedMap:
   
   def __str__(self):
     s=''
-    for outerKey in self.outerMap.keys():
+    for outerKey in sorted(self.outerMap.keys(),key=lambda x: len(x), reverse=True):
       innerMap = self.outerMap[outerKey]
       s+=outerKey+'\n'
       for innerKey in innerMap.keys():
@@ -186,6 +188,29 @@ class GameTreeIterator:
       self.traverse() #recursive call
       self.hx.popAction()  
 
+  # def traverseFullInfoSets(self):
+  #   for rank in RANK_NAMES:
+  #     self.hx.pockets=[rank,None]
+  #     self.traverseInfoSets()
+
+  # def traverseInfoSets(self):
+  #   print('INFOSET',self.hx)
+  #   possibleActions = self.hx.nextActions()
+  #   if not possibleActions:
+  #     print(f'INFOSET Terminal: {self.hx}')
+  #     return
+    
+
+    # updateBeliefs(self.hx)
+    # for action in possibleActions:
+    #   self.hx.appendAction(action)
+    #   self.traverseInfoSets() #recursive call
+    #   self.hx.popAction()  
+
+class InfoSetIterator:
+  def __init__(self):
+    pass
+
 
 def initStrategies(infoSetStr,action,numPossibleActions):
   Strategy.data.setVal(infoSetStr,action,1/numPossibleActions)
@@ -264,4 +289,55 @@ print(Beliefs.data)
 util=calcUtilityAtTerminalNode('JQ','pbb')
 print(f'util={util}')
 
+expectedUtilsByInfoSet = {}
+sortedInfoSet = sorted(Beliefs.data.outerMap.keys(), key=lambda x: len(x), reverse=True)
+print(sortedInfoSet)
 
+for infoSet in sortedInfoSet:
+  beliefs = Beliefs.data.getInnerMap(infoSet)
+  print(f'infoSet={infoSet}, beliefs={beliefs}')
+
+  possibleOpponentPockets = list(beliefs.keys())
+
+  possibleActions = Strategy.data.getInnerMap(infoSet)
+
+  playerIdx = (len(infoSet)-1)%2
+  for action in possibleActions:
+    actionStr = infoSet[1:]+action
+    expectedUtil=0
+    for possibleOpponentPocket in possibleOpponentPockets:
+      opponentsInfoSet = possibleOpponentPocket+actionStr
+
+      util=None
+      isInfoSet=None
+      if opponentsInfoSet in Strategy.data.outerMap.keys():
+        isInfoSet=True
+        util=((-1)**(playerIdx))*expectedUtilsByInfoSet[opponentsInfoSet]
+        print(f'opponentsInfoSet={opponentsInfoSet}, isInfoSet={isInfoSet}, infoSet={infoSet}, action={action}, opponentsInfoSet={opponentsInfoSet}, expectedUtilsByInfoSet[opponentsInfoSet]={expectedUtilsByInfoSet[opponentsInfoSet]}, playerIdx={playerIdx}, util={util}, belief={belief}')
+      else:
+        isInfoSet=False
+        utils=calcUtilityAtTerminalNode(infoSet[0]+possibleOpponentPocket,actionStr)
+        util=-1*utils[playerIdx]
+        print(f'\topponentsInfoSet={opponentsInfoSet}, isInfoSet={isInfoSet}, infoSet={infoSet}, action={action}, playerIdx={playerIdx}, util={util}, belief={beliefs[possibleOpponentPocket]}')
+
+      belief = beliefs[possibleOpponentPocket]
+      expectedUtil+=util*belief
+
+      # print(f'expectedUtil={expectedUtil}')
+    Utilities.data.setVal(infoSet,action,expectedUtil)
+    print(f'infoSet={infoSet}, action={action}, expectedUtil={expectedUtil}')
+
+  expectedUtilsByInfoSet[infoSet] = 0
+  for action in Utilities.data.getInnerMap(infoSet).keys():
+    strat = Strategy.data.getVal(infoSet,action)
+    util = Utilities.data.getVal(infoSet,action)
+    expectedUtilsByInfoSet[infoSet]+=strat*util 
+    
+
+print(Utilities.data)
+print('ExpectedUtils',expectedUtilsByInfoSet)
+
+
+
+util=calcUtilityAtTerminalNode('JQ','pbb')
+print(f'util={util}')
