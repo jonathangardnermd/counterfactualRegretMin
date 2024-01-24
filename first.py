@@ -295,7 +295,7 @@ print(sortedInfoSet)
 
 for infoSet in sortedInfoSet:
   beliefs = Beliefs.data.getInnerMap(infoSet)
-  print(f'infoSet={infoSet}, beliefs={beliefs}')
+  # print(f'infoSet={infoSet}, beliefs={beliefs}')
 
   possibleOpponentPockets = list(beliefs.keys())
 
@@ -305,6 +305,7 @@ for infoSet in sortedInfoSet:
   for action in possibleActions:
     actionStr = infoSet[1:]+action
     expectedUtil=0
+    expectedUtilStr=''
     for possibleOpponentPocket in possibleOpponentPockets:
       opponentsInfoSet = possibleOpponentPocket+actionStr
 
@@ -312,20 +313,20 @@ for infoSet in sortedInfoSet:
       isInfoSet=None
       if opponentsInfoSet in Strategy.data.outerMap.keys():
         isInfoSet=True
-        util=((-1)**(playerIdx))*expectedUtilsByInfoSet[opponentsInfoSet]
-        print(f'opponentsInfoSet={opponentsInfoSet}, isInfoSet={isInfoSet}, infoSet={infoSet}, action={action}, opponentsInfoSet={opponentsInfoSet}, expectedUtilsByInfoSet[opponentsInfoSet]={expectedUtilsByInfoSet[opponentsInfoSet]}, playerIdx={playerIdx}, util={util}, belief={belief}')
+        util=expectedUtilsByInfoSet[opponentsInfoSet]
+        # print(f'opponentsInfoSet={opponentsInfoSet}, isInfoSet={isInfoSet}, infoSet={infoSet}, action={action}, opponentsInfoSet={opponentsInfoSet}, expectedUtilsByInfoSet[opponentsInfoSet]={expectedUtilsByInfoSet[opponentsInfoSet]}, playerIdx={playerIdx}, util={util}, belief={belief}')
       else:
         isInfoSet=False
         utils=calcUtilityAtTerminalNode(infoSet[0]+possibleOpponentPocket,actionStr)
-        util=-1*utils[playerIdx]
-        print(f'\topponentsInfoSet={opponentsInfoSet}, isInfoSet={isInfoSet}, infoSet={infoSet}, action={action}, playerIdx={playerIdx}, util={util}, belief={beliefs[possibleOpponentPocket]}')
+        util=utils[0]
+        # print(f'\topponentsInfoSet={opponentsInfoSet}, isInfoSet={isInfoSet}, infoSet={infoSet}, action={action}, playerIdx={playerIdx}, util={util}, belief={beliefs[possibleOpponentPocket]}')
 
       belief = beliefs[possibleOpponentPocket]
       expectedUtil+=util*belief
-
+      expectedUtilStr+=f'+({belief:.2f})({util:.2f})'
       # print(f'expectedUtil={expectedUtil}')
     Utilities.data.setVal(infoSet,action,expectedUtil)
-    print(f'infoSet={infoSet}, action={action}, expectedUtil={expectedUtil}')
+    print(f'infoSet={infoSet}, action={action}, expectedUtil:{expectedUtilStr} {expectedUtil}, isInfoSet={isInfoSet}, beliefs={beliefs}')
 
   expectedUtilsByInfoSet[infoSet] = 0
   for action in Utilities.data.getInnerMap(infoSet).keys():
