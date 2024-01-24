@@ -16,7 +16,6 @@ def playerOnePocketIsHigher(pocket1,pocket2):
 
 def calcUtilityAtTerminalNode(pockets,actions: list):
   actionStr = ''.join(actions)
-  # print(f'calcUtilityAtTerminalNode={actionStr}, pockets={pockets}')
   utility=None
   if actionStr=='pp':
     # both checked
@@ -29,14 +28,13 @@ def calcUtilityAtTerminalNode(pockets,actions: list):
     utility= -1,1
   elif actionStr=='bp':
     # player 2 folded
-    utility= 1,1
+    utility= 1,-1
   elif actionStr=='bb' or actionStr=='pbb':
     if playerOnePocketIsHigher(*pockets):
       utility= 2,-2
     else:
       utility= -2,2
   else:
-    # utility=0,0
     raise ValueError(f'unexpected actionStr={actionStr}')
   return utility*ante
 
@@ -53,6 +51,11 @@ print(getAllPockets())
 
 def getPossibleOpponentPockets(pocket):
     return [rank for rank in RANK_NAMES if rank!=pocket]
+
+def getOppInfoSets(infoSet, action):
+  oppPockets = getPossibleOpponentPockets(infoSet[0])
+  actionStr = infoSet[1:]+action
+  return [oppPocket+actionStr for oppPocket in oppPockets]
 
 print(getPossibleOpponentPockets('Q'))
 
@@ -293,46 +296,91 @@ expectedUtilsByInfoSet = {}
 sortedInfoSet = sorted(Beliefs.data.outerMap.keys(), key=lambda x: len(x), reverse=True)
 print(sortedInfoSet)
 
-for infoSet in sortedInfoSet:
-  beliefs = Beliefs.data.getInnerMap(infoSet)
-  # print(f'infoSet={infoSet}, beliefs={beliefs}')
 
-  possibleOpponentPockets = list(beliefs.keys())
-
-  possibleActions = Strategy.data.getInnerMap(infoSet)
-
+def calcUtilitiesForInfoSet(infoSet,expectedUtilsByInfoSet):
   playerIdx = (len(infoSet)-1)%2
+  ALL_INFO_SETS = Strategy.data.outerMap.keys()
+  beliefs = Beliefs.data.getInnerMap(infoSet)
+  possibleActions = Strategy.data.getInnerMap(infoSet).keys()
   for action in possibleActions:
-    actionStr = infoSet[1:]+action
-    expectedUtil=0
-    expectedUtilStr=''
-    for possibleOpponentPocket in possibleOpponentPockets:
-      opponentsInfoSet = possibleOpponentPocket+actionStr
+    # expectedUtilForAction=0
+    utilFromInfoSets,utilFromTerminalNodes=0,0
+    oppInfoSets=getOppInfoSets(infoSet,action)
+    for oppInfoSet in oppInfoSets:
+      probOfThisInfoSet = beliefs[oppInfoSet[0]]
+      pockets=[0,0]
+      pockets[playerIdx]=infoSet[0]
+      pockets[1-playerIdx]=oppInfoSet[0]
+      pocketsStr = ''.join(pockets)
+      if oppInfoSet not in ALL_INFO_SETS:
+        utils = calcUtilityAtTerminalNode(pocketsStr,oppInfoSet[1:])
+        # util = util[playerIdx]
+        utilFromTerminalNodes+=probOfThisInfoSet*utils[playerIdx]
+        print(f'oppInfoSet={oppInfoSet}, infoSet={infoSet}, playerIdx={playerIdx}, utils={utils}, beliefs={beliefs}')
 
-      util=None
-      isInfoSet=None
-      if opponentsInfoSet in Strategy.data.outerMap.keys():
-        isInfoSet=True
-        util=expectedUtilsByInfoSet[opponentsInfoSet]
-        # print(f'opponentsInfoSet={opponentsInfoSet}, isInfoSet={isInfoSet}, infoSet={infoSet}, action={action}, opponentsInfoSet={opponentsInfoSet}, expectedUtilsByInfoSet[opponentsInfoSet]={expectedUtilsByInfoSet[opponentsInfoSet]}, playerIdx={playerIdx}, util={util}, belief={belief}')
-      else:
-        isInfoSet=False
-        utils=calcUtilityAtTerminalNode(infoSet[0]+possibleOpponentPocket,actionStr)
-        util=utils[0]
-        # print(f'\topponentsInfoSet={opponentsInfoSet}, isInfoSet={isInfoSet}, infoSet={infoSet}, action={action}, playerIdx={playerIdx}, util={util}, belief={beliefs[possibleOpponentPocket]}')
+        continue
 
-      belief = beliefs[possibleOpponentPocket]
-      expectedUtil+=util*belief
-      expectedUtilStr+=f'+({belief:.2f})({util:.2f})'
-      # print(f'expectedUtil={expectedUtil}')
-    Utilities.data.setVal(infoSet,action,expectedUtil)
-    print(f'infoSet={infoSet}, action={action}, expectedUtil:{expectedUtilStr} {expectedUtil}, isInfoSet={isInfoSet}, beliefs={beliefs}')
+      oppStrat = Strategy.data.getInnerMap(oppInfoSet)
+      for oppAction in oppStrat.keys():
+        probOfOppAction = oppStrat[oppAction]
 
+        destinationInfoSet = infoSet+action+oppAction
+        if destinationInfoSet in ALL_INFO_SETS:
+          # it's another infoSet, and we've already calculated the expectedUtility of this infoSet
+          utilFromInfoSets+=probOfThisInfoSet*probOfOppAction*expectedUtilsByInfoSet[destinationInfoSet]
+        else:
+          # it's a terminal node
+          utils=calcUtilityAtTerminalNode(pocketsStr,destinationInfoSet[1:])
+          utilFromTerminalNodes+=probOfThisInfoSet*probOfOppAction*utils[playerIdx]
+          print(f'infoSet={infoSet}, destinationInfoSet={pocketsStr,destinationInfoSet[1:]}, probOfThisInfoSet={probOfThisInfoSet}, probOfOppAction={probOfOppAction}, util={utils}')
+
+    Utilities.data.setVal(infoSet,action,utilFromInfoSets+utilFromTerminalNodes)
   expectedUtilsByInfoSet[infoSet] = 0
-  for action in Utilities.data.getInnerMap(infoSet).keys():
+  for action in possibleActions:
     strat = Strategy.data.getVal(infoSet,action)
     util = Utilities.data.getVal(infoSet,action)
     expectedUtilsByInfoSet[infoSet]+=strat*util 
+
+# expectedUtilsByInfoSet={}
+for infoSet in sortedInfoSet:
+  calcUtilitiesForInfoSet(infoSet,expectedUtilsByInfoSet)
+
+# for infoSet in sortedInfoSet:
+#   beliefs = Beliefs.data.getInnerMap(infoSet)
+#   # print(f'infoSet={infoSet}, beliefs={beliefs}')
+
+#   possibleOpponentPockets = list(beliefs.keys())
+
+#   possibleActions = Strategy.data.getInnerMap(infoSet)
+
+#   playerIdx = (len(infoSet)-1)%2
+#   for action in possibleActions:
+#     actionStr = infoSet[1:]+action
+#     expectedUtil=0
+#     expectedUtilStr=''
+#     for possibleOpponentPocket in possibleOpponentPockets:
+#       opponentsInfoSet = possibleOpponentPocket+actionStr
+
+#       util=None
+#       isInfoSet=None
+#       if opponentsInfoSet in Strategy.data.outerMap.keys():
+#         isInfoSet=True
+#         util=expectedUtilsByInfoSet[opponentsInfoSet]
+#         # print(f'opponentsInfoSet={opponentsInfoSet}, isInfoSet={isInfoSet}, infoSet={infoSet}, action={action}, opponentsInfoSet={opponentsInfoSet}, expectedUtilsByInfoSet[opponentsInfoSet]={expectedUtilsByInfoSet[opponentsInfoSet]}, playerIdx={playerIdx}, util={util}, belief={belief}')
+#       else:
+#         isInfoSet=False
+#         utils=calcUtilityAtTerminalNode(infoSet[0]+possibleOpponentPocket,actionStr)
+#         util=utils[0]
+#         # print(f'\topponentsInfoSet={opponentsInfoSet}, isInfoSet={isInfoSet}, infoSet={infoSet}, action={action}, playerIdx={playerIdx}, util={util}, belief={beliefs[possibleOpponentPocket]}')
+
+#       belief = beliefs[possibleOpponentPocket]
+#       expectedUtil+=util*belief
+#       expectedUtilStr+=f'+({belief:.2f})({util:.2f})'
+#       # print(f'expectedUtil={expectedUtil}')
+#     Utilities.data.setVal(infoSet,action,expectedUtil)
+#     print(f'infoSet={infoSet}, action={action}, expectedUtil:{expectedUtilStr} {expectedUtil}, isInfoSet={isInfoSet}, beliefs={beliefs}')
+
+
     
 
 print(Utilities.data)
