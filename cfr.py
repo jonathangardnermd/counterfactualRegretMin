@@ -2,6 +2,8 @@ from __future__ import annotations
 from collections import deque
 from typing import Generator,Any
 
+RANKS = ['K','Q','J']
+
 class Action:
   PASS='p'
   BET='b'
@@ -18,7 +20,6 @@ def playerOnePocketIsHigher(pocket1,pocket2):
   raise ValueError('this should not occur bc one player must have a K or J')
 
 def calcUtilityAtTerminalNode(pockets,actionStr: str):
-#   actionStr = ''.join(actions)
   if actionStr=='pp':
     # both checked
     if playerOnePocketIsHigher(*pockets):
@@ -38,7 +39,6 @@ def calcUtilityAtTerminalNode(pockets,actionStr: str):
       return -2,2
   else:
     raise ValueError(f'unexpected actionStr={actionStr}')
-#   return utility*ante
 
 def findFirstOccurrences(arr,val,startIdx=0,numOccurrences=1):
   idx,ct=startIdx,0
@@ -49,13 +49,17 @@ def findFirstOccurrences(arr,val,startIdx=0,numOccurrences=1):
       return True
     idx+=1
 
-RANKS = ['K','Q','J']
-
+# class InfoSetNode:
+#     def __init__(self,infoSetStr):
+#         self.infoSetStr=infoSetStr
+#         self._children=None
+#         self.data: Any = None
+    
 class Node:
     def __init__(self,infoSetStr):
         self.infoSetStr=infoSetStr
         self._children=None
-        self.data: Any = None
+        # self.data: Any = None
 
     def isTerminal(self):
         if self._children is None:
@@ -78,7 +82,7 @@ class Node:
         return self._children
     
     def __str__(self):
-        return f'{self.infoSetStr}, isTerminal={self.isTerminal()}, data={self.data}'
+        return f'{self.infoSetStr}, isTerminal={self.isTerminal()}'
 
 def bfsIter(root:Node) -> Generator[Node]:
     q=deque(root.children()) #do not include root node in the returned nodes
@@ -98,6 +102,9 @@ class InfoSetData:
     def __str__(self):
         return f'{self.actions}'
 
+    def __repr__(self):
+        return self.__str__()
+    
 class InfoSetActionData:
     def __init__(self):
         self.strategy=None
@@ -125,19 +132,35 @@ class GameRootNode(Node):
 #         print(node)
 # init()
 
+INFOSETS = {}
+TERMINAL_NODES={}
+
+def getPossibleOpponentPockets(pocket):
+    return [rank for rank in RANKS if rank!=pocket]
+
 def initCfr():
     # init strategies
+    ct=0
     root = GameRootNode()
     gameTreeIter = iter(bfsIter(root))
     while True:
         node = next(gameTreeIter,None)
         if not node:
             break
-        # print(node)
-        if not node.isTerminal():
-            # node.children()
+        if node.isTerminal():
+            pass
+            player1Pocket = node.infoSetStr[0]
+            possiblePlayer2Pockets=getPossibleOpponentPockets(player1Pocket)
+            for player2Pocket in possiblePlayer2Pockets:
+                actionStr=node.infoSetStr[1:]
+                TERMINAL_NODES[player1Pocket+player2Pocket+actionStr]=calcUtilityAtTerminalNode([player1Pocket,player2Pocket],actionStr)
+                ct+=1
+        else:
+            pass
             data = InfoSetData()
-            node.data=data
+            INFOSETS[node.infoSetStr]=data
+
+            # node.data=data
             children = node.children()
             for child in children:
                 lastAction = child.infoSetStr[-1]
@@ -145,16 +168,19 @@ def initCfr():
                 actionData.strategy = 1/len(children)
                 data.actions[lastAction]=actionData
         print(node)
+    print(f'ct={ct}')
             
 def runCfrIteration():
     # init strategies
     # init terminal utilities
-    
+
     pass 
 
 
 
 initCfr()
-
+print(INFOSETS)
+print(TERMINAL_NODES)
+# print(len(TERMINAL_NODES))
 
 
