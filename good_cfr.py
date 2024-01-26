@@ -309,47 +309,48 @@ def setInitialStrategiesToSpecificValues():
 ##################################################################################################################
 # We're done defining functions, etc. Now it's time to invoke them and DO STUFF!
 ##################################################################################################################
-initInfoSets()
-# setInitialStrategiesToSpecificValues() # uncomment in order to get the values in professor bryce's youtube video: https://www.youtube.com/watch?v=ygDt_AumPr0&t=668s: Counterfactual Regret Minimization (AGT 26)
+if __name__ == "__main__":
+    initInfoSets()
+    # setInitialStrategiesToSpecificValues() # uncomment in order to get the values in professor bryce's youtube video: https://www.youtube.com/watch?v=ygDt_AumPr0&t=668s: Counterfactual Regret Minimization (AGT 26)
 
-numIterations=300000 # best numIterations for closest convergence
-# numIterations=3000 # best numIterations for plotting the convergence
-# numIterations=1 # best to checking that the output values match professor bryce's youtube video: https://www.youtube.com/watch?v=ygDt_AumPr0&t=668s: Counterfactual Regret Minimization (AGT 26)
-totGains = []
+    # numIterations=300000 # best numIterations for closest convergence
+    numIterations=3000 # best numIterations for plotting the convergence
+    # numIterations=1 # best to checking that the output values match professor bryce's youtube video: https://www.youtube.com/watch?v=ygDt_AumPr0&t=668s: Counterfactual Regret Minimization (AGT 26)
+    totGains = []
 
-# only plot the gain from every xth iteration (in order to lessen the amount of data that needs to be plotted)
-numGainsToPlot=100 
-gainGrpSize = numIterations//numGainsToPlot 
+    # only plot the gain from every xth iteration (in order to lessen the amount of data that needs to be plotted)
+    numGainsToPlot=100 
+    gainGrpSize = numIterations//numGainsToPlot 
 
-for i in range(numIterations):
-    updateBeliefs()
+    for i in range(numIterations):
+        updateBeliefs()
 
-    for infoSetStr in reversed(sortedInfoSets):
-        updateUtilitiesForInfoSetStr(infoSetStr)
+        for infoSetStr in reversed(sortedInfoSets):
+            updateUtilitiesForInfoSetStr(infoSetStr)
 
-    calcInfoSetLikelihoods()
-    totGain = calcGains()
-    if i%gainGrpSize==0: # every 10 or 100 or x rounds, save off the gain so we can plot it afterwards and visually see convergence
-       totGains.append(totGain)
-       print(f'TOT_GAIN {totGain: .3f}')
-    updateStrategy()
+        calcInfoSetLikelihoods()
+        totGain = calcGains()
+        if i%gainGrpSize==0: # every 10 or 100 or x rounds, save off the gain so we can plot it afterwards and visually see convergence
+            totGains.append(totGain)
+            print(f'TOT_GAIN {totGain: .3f}')
+        updateStrategy()
 
-InfoSetData.printInfoSetDataTable(infoSets)
+    InfoSetData.printInfoSetDataTable(infoSets)
 
-# The if statement is just meant to make the script easier to run if you don't want to install matplotlib
-if 'matplotlib' in sys.modules:
-    print(f'Plotting {len(totGains)} totGains')
-    # Generate random x, y coordinates
-    x = [x*gainGrpSize for x in range(len(totGains))]
-    y = totGains
+    # The if statement is just meant to make the script easier to run if you don't want to install matplotlib
+    if 'matplotlib' in sys.modules:
+        print(f'Plotting {len(totGains)} totGains')
+        # Generate random x, y coordinates
+        x = [x*gainGrpSize for x in range(len(totGains))]
+        y = totGains
 
-    # Create scatter plot
-    plt.scatter(x, y)
+        # Create scatter plot
+        plt.scatter(x, y)
 
-    # Set title and labels
-    plt.title('Total Gain per iteration')
-    plt.xlabel(f'Iteration # ')
-    plt.ylabel('Total Gain In Round')
+        # Set title and labels
+        plt.title('Total Gain per iteration')
+        plt.xlabel(f'Iteration # ')
+        plt.ylabel('Total Gain In Round')
 
-    # Display the plot
-    plt.show()
+        # Display the plot
+        plt.show()
