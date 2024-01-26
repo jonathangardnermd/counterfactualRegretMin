@@ -1,8 +1,9 @@
 from __future__ import annotations
 from tabulate import tabulate
+import sys
 
-
-
+infoSets: dict[str, InfoSetData] = {}
+sortedInfoSets = []
 
 RANKS = ["K", "Q", "J"]
 ACTIONS = ["b", "p"]
@@ -20,17 +21,8 @@ INFO_SET_ACTION_STRS = {
     "pb",
 }  # action paths where a decision still needs to be made by one of the players (i.e. actions paths that end on an infoSet)
 
-
-
 def getDecidingPlayerForInfoSetStr(infoSetStr: str):
     return (len(infoSetStr)-1)%2
-
-# def initGains():
-#   for infoSet in Strategy.data.outerMap.keys():
-#     innerMap = Strategy.data.outerMap[infoSet]
-#     for action in innerMap.keys():
-#       stratVal = innerMap[action]
-#       Gains.data.setVal(infoSet,action,stratVal)
 
 class InfoSetData:
     def __init__(self):
@@ -51,7 +43,25 @@ class InfoSetData:
             rows.append(row)
         
         headers = ["InfoSet","Strat:Bet", "Strat:Pass", "---","Belief:H", "Belief:L", "---","Util:Bet","Util:Pass","ExpectedUtil","Likelihood","---","TotGain:Bet","TotGain:Pass"]
-        print(tabulate(rows, headers=headers,tablefmt="pretty",stralign="left"))
+
+        if 'tabulate' in sys.modules:
+            print(tabulate(rows, headers=headers,tablefmt="pretty",stralign="left"))
+        else:
+            # Calculate maximum width for each column
+            max_widths = [max(len(str(cell)) for cell in column) for column in zip(headers, *rows)]
+
+            # Print headers
+            header_line = "   ".join(header.ljust(width) for header, width in zip(headers, max_widths))
+            print(header_line)
+
+            # Print separator
+            separator_line = "-" * (sum(max_widths)+3*len(headers))
+            print(separator_line)
+
+            # Print rows
+            for row in rows:
+                row_line = "   ".join(str(cell).ljust(width) for cell, width in zip(row, max_widths))
+                print(row_line)
 
     def getStrategyTableData(self):
         return [f'{self.actions[action].strategy:.2f}' for action in ACTIONS]
@@ -65,29 +75,14 @@ class InfoSetData:
     def getBeliefTableData(self):
         return [f'{self.beliefs[oppPocket]:.2f}' for oppPocket in self.beliefs.keys()]
 
-    def __str__(self):
-        return f"{self.actions}, {self.beliefs}"
-
-    def __repr__(self):
-        return self.__str__()
-
-
 class InfoSetActionData:
     def __init__(self, initStratVal):
         self.strategy = initStratVal
-        # self.belief=None
         self.util = None
         self.cumulativeGain = initStratVal #initialize it to be consistent with the initial strategies... not sure if this is necessary though
 
-    def __str__(self):
-        return f"S={self.strategy}, U={self.util}"
-
-    def __repr__(self):
-        return self.__str__()
-
 def getPossibleOpponentPockets(pocket):
     return [rank for rank in RANKS if rank != pocket]
-
 
 def getAncestralInfoSetStrs(infoSetStr) -> list[InfoSetData]:
     if len(infoSetStr) == 1:
@@ -133,6 +128,13 @@ def calcUtilityAtTerminalNode(pocket1,pocket2,actionStr: str):
     raise ValueError(f'unexpected actionStr={actionStr}')
   
 
+def initInfoSets():
+    for actionsStrs in sorted(INFO_SET_ACTION_STRS, key=lambda x:len(x)):
+        for rank in RANKS:
+            infoSetStr = rank + actionsStrs
+            infoSets[infoSetStr] = InfoSetData()
+            sortedInfoSets.append(infoSetStr)
+
 def updateBeliefs():
     for infoSetStr in sortedInfoSets:
         infoSet = infoSets[infoSetStr]
@@ -146,7 +148,7 @@ def updateBeliefs():
             tot = 0
             for oppInfoSetStr in ancestralInfoSetStrs:
                 oppInfoSet=infoSets[oppInfoSetStr]
-                tot += oppInfoSet.actions[lastAction].strategy #Strategy.data.getVal(infoSet, lastAction)
+                tot += oppInfoSet.actions[lastAction].strategy
             for oppInfoSetStr in ancestralInfoSetStrs:
                 oppInfoSet=infoSets[oppInfoSetStr]
                 oppPocket = oppInfoSetStr[0]
@@ -206,135 +208,80 @@ def calcInfoSetLikelihoods():
       for oppPocket in possibleOppPockets:
         oppInfoSet = infoSets[oppPocket + infoSetStr[1:-1]]
         infoSetTwoLevelsAgo = infoSets[infoSetStr[:-2]] 
-        
         infoSet.likelihood+=infoSetTwoLevelsAgo.likelihood*oppInfoSet.actions[infoSetStr[-1]].strategy/len(possibleOppPockets)
-        # print(f'likelihood: infoSet={infoSet}, oppInfoSet={oppInfoSet}, infoSetLikelihoods[infoSet[:-2]]={infoSetLikelihoods[infoSet[:-2]]}, stratVal={Strategy.data.getVal(oppInfoSet,infoSet[-1])}')
-
 
 def calcGains():
-#   calcInfoSetLikelihoods()
   totAddedGain=0.0
   for infoSetStr in sortedInfoSets:
     infoSet = infoSets[infoSetStr]
-    # possibleActions = Strategy.data.getInnerMap(infoSet).keys()
     for action in ACTIONS:
-      utilForActionPureStrat = infoSet.actions[action].util #Utilities.data.getVal(infoSetStr,action)
+      utilForActionPureStrat = infoSet.actions[action].util 
       gain = max(0,utilForActionPureStrat-infoSet.expectedUtil)
-    #   if showGains and gain>.01:
-        # print(f'infoSet={infoSetStr}, action={action}, gain={gain}, utilForActionPureStrat={utilForActionPureStrat}, expectedUtilsByInfoSet[infoSet]={expectedUtilsByInfoSet[infoSetStr]}')
       totAddedGain+=gain
       infoSet.actions[action].cumulativeGain+=gain * infoSet.likelihood
-    #   Gains.data.addToVal(infoSetStr,action,gain*infoSetLikelihoods[infoSetStr])
   return totAddedGain
 
 def updateStrategy():
   for infoSetStr in sortedInfoSets:
     infoSet = infoSets[infoSetStr]
-    gains = [infoSet.actions[action].cumulativeGain for action in ACTIONS] #Gains.data.getInnerMap(infoSetStr)
+    gains = [infoSet.actions[action].cumulativeGain for action in ACTIONS] 
     totGains = sum(gains)
-    # possibleActions = Strategy.data.getInnerMap(infoSetStr).keys()
     for action in ACTIONS:
-    #   Strategy.data.setVal(infoSetStr,action,gains[action]/totGains)
       gain = infoSet.actions[action].cumulativeGain
       infoSet.actions[action].strategy = gain/totGains
 
-# init infoSets
-infoSets: dict[str, InfoSetData] = {}
-sortedInfoSets = []
-for actionsStrs in sorted(INFO_SET_ACTION_STRS, key=lambda x:len(x)):
-    for rank in RANKS:
-        infoSetStr = rank + actionsStrs
-        infoSets[infoSetStr] = InfoSetData()
-        sortedInfoSets.append(infoSetStr)
-        # print(infoSetStr)
+def setInitialStrategiesToSpecificValues():
+    # player 1
+    infoSets['K'].actions['b'].strategy=2/3
+    infoSets['K'].actions['p'].strategy=1/3
 
+    infoSets['Q'].actions['b'].strategy=1/2
+    infoSets['Q'].actions['p'].strategy=1/2
 
+    infoSets['J'].actions['b'].strategy=1/3
+    infoSets['J'].actions['p'].strategy=2/3
 
-# #player 1
-infoSets['K'].actions['b'].strategy=2/3
-infoSets['K'].actions['p'].strategy=1/3
+    infoSets['Kpb'].actions['b'].strategy=1
+    infoSets['Kpb'].actions['p'].strategy=0
 
-infoSets['Q'].actions['b'].strategy=1/2
-infoSets['Q'].actions['p'].strategy=1/2
+    infoSets['Qpb'].actions['b'].strategy=1/2
+    infoSets['Qpb'].actions['p'].strategy=1/2
 
-infoSets['J'].actions['b'].strategy=1/3
-infoSets['J'].actions['p'].strategy=2/3
+    infoSets['Jpb'].actions['b'].strategy=0
+    infoSets['Jpb'].actions['p'].strategy=1
 
-infoSets['Kpb'].actions['b'].strategy=1
-infoSets['Kpb'].actions['p'].strategy=0
+    # player2
+    infoSets['Kb'].actions['b'].strategy=1
+    infoSets['Kb'].actions['p'].strategy=0
+    infoSets['Kp'].actions['b'].strategy=1
+    infoSets['Kp'].actions['p'].strategy=0
 
-infoSets['Qpb'].actions['b'].strategy=1/2
-infoSets['Qpb'].actions['p'].strategy=1/2
+    infoSets['Qb'].actions['b'].strategy=1/2
+    infoSets['Qb'].actions['p'].strategy=1/2
+    infoSets['Qp'].actions['b'].strategy=2/3
+    infoSets['Qp'].actions['p'].strategy=1/3
 
-infoSets['Jpb'].actions['b'].strategy=0
-infoSets['Jpb'].actions['p'].strategy=1
+    infoSets['Jb'].actions['b'].strategy=0
+    infoSets['Jb'].actions['p'].strategy=1
+    infoSets['Jp'].actions['b'].strategy=1/3
+    infoSets['Jp'].actions['p'].strategy=2/3
 
-# #player2
-infoSets['Kb'].actions['b'].strategy=1
-infoSets['Kb'].actions['p'].strategy=0
-infoSets['Kp'].actions['b'].strategy=1
-infoSets['Kp'].actions['p'].strategy=0
+# DO STUFF
+initInfoSets()
+# setInitialStrategiesToSpecificValues()
 
-infoSets['Qb'].actions['b'].strategy=1/2
-infoSets['Qb'].actions['p'].strategy=1/2
-infoSets['Qp'].actions['b'].strategy=2/3
-infoSets['Qp'].actions['p'].strategy=1/3
-
-infoSets['Jb'].actions['b'].strategy=0
-infoSets['Jb'].actions['p'].strategy=1
-infoSets['Jp'].actions['b'].strategy=1/3
-infoSets['Jp'].actions['p'].strategy=2/3
-
-
-for i in range(10000):
+# numIterations=30000
+numIterations=1
+for i in range(numIterations):
     updateBeliefs()
 
     for infoSetStr in reversed(sortedInfoSets):
         updateUtilitiesForInfoSetStr(infoSetStr)
-    # print(infoSets)
-
 
     calcInfoSetLikelihoods()
     totGains = calcGains()
     updateStrategy()
 
-    print('TOT',totGains)
-# # Example data
-# data = [
-#     ["Alice", 24, "Engineer"],
-#     ["Bob", 30, "Designer"],
-#     ["Charlie", 27, "Manager"]
-# ]
-
-# # Printing a nicely formatted table to the console
-# print(tabulate(data, headers=["Name", "Age", "Occupation"],tablefmt="pretty"))
-
+    print('TOT_GAINS',totGains)
 
 InfoSetData.printInfoSetDataTable(infoSets)
-
-
-
-# print(infoSets['Kb'].beliefs)
-
-# from tabulate import tabulate
-
-# # Example data for table 1
-# data1 = [
-#     ["Alice", 24, "Engineer"],
-#     ["Bob", 30, "Designer"],
-#     ["Charlie", 27, "Manager"]
-# ]
-
-# # Example data for table 2
-# data2 = [
-#     ["Dave", 35, "Developer"],
-#     ["Eve", 28, "Analyst"],
-#     ["Frank", 32, "Consultant"]
-# ]
-
-# table1_str = tabulate(data1, headers=["Name", "Age", "Occupation"], tablefmt="plain")
-# # table2_str = tabulate(data2, headers=["Name", "Age", "Occupation"], tablefmt="plain")
-
-# # Printing tables on the same row
-# print(table1_str, end='    ')
-# # print(table2_str)
