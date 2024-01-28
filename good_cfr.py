@@ -185,9 +185,12 @@ def updateUtilitiesForInfoSetStr(infoSetStr):
         utilFromInfoSets,utilFromTerminalNodes=0,0
         for descendentInfoSetStr in descendentInfoSetStrs:
             probOfThisInfoSet = beliefs[descendentInfoSetStr[0]]
-            pockets=[0,0]
-            pockets[playerIdx]=infoSetStr[0]
-            pockets[1-playerIdx]=descendentInfoSetStr[0]
+
+            pockets=[infoSetStr[0],descendentInfoSetStr[0]]
+            # we use pockets when we invoke calcUtilityAtTerminalNode below, but we need to switch the order of the pockets when we're calculating player 2's (playerIdx==1) payoff  
+            # this is admittedly confusing, but it makes sense if you think through a specific example
+            if playerIdx==1: 
+               pockets=list(reversed(pockets))
             if actionStr in TERMINAL_ACTION_STR_MAP:
                 # choosing this action moves us to a terminal node
                 utils=calcUtilityAtTerminalNode(*pockets,actionStr)
@@ -229,7 +232,7 @@ def calcInfoSetLikelihoods():
       # depending on which card player 1 was dealt. The likelihood of 'Qp' is therefore the addition of the likelihood along each of these possible paths
       for oppPocket in possibleOppPockets:
         oppInfoSet = infoSets[oppPocket + infoSetStr[1:-1]]
-        infoSet.likelihood+=1/len(RANKS)*oppInfoSet.actions[infoSetStr[-1]].strategy
+        infoSet.likelihood+=oppInfoSet.actions[infoSetStr[-1]].strategy/(len(RANKS)*len(possibleOppPockets))
     else:
       # For infoSets on the third-tier and beyond, we can use the likelihoods of the infoSets two levels before to calculate their likelihoods.
       # Note, we can't simply use the infoSet one tier before because that's the opponent's infoSet, and the calculation of likelihoods 
@@ -313,14 +316,16 @@ if __name__ == "__main__":
     initInfoSets()
     # setInitialStrategiesToSpecificValues() # uncomment in order to get the values in professor bryce's youtube video: https://www.youtube.com/watch?v=ygDt_AumPr0&t=668s: Counterfactual Regret Minimization (AGT 26)
 
-    # numIterations=300000 # best numIterations for closest convergence
-    numIterations=3000 # best numIterations for plotting the convergence
+    numIterations=300000 # best numIterations for closest convergence
+    # numIterations=3000 # best numIterations for plotting the convergence
     # numIterations=1 # best to checking that the output values match professor bryce's youtube video: https://www.youtube.com/watch?v=ygDt_AumPr0&t=668s: Counterfactual Regret Minimization (AGT 26)
     totGains = []
 
     # only plot the gain from every xth iteration (in order to lessen the amount of data that needs to be plotted)
     numGainsToPlot=100 
     gainGrpSize = numIterations//numGainsToPlot 
+    if gainGrpSize==0:
+       gainGrpSize=1
 
     for i in range(numIterations):
         updateBeliefs()
